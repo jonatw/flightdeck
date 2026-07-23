@@ -1,0 +1,29 @@
+name: redaction
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    branches: [main]
+permissions: { contents: read, pull-requests: read }
+jobs:
+  redaction:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }          # 深度 0 才能掃 history/diff
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - name: working-tree scan
+        run: |
+          set +e; node scripts/redaction-scan.js .; c=$?
+          [ $c -eq 1 ] && { echo "::error::HARD redaction hit"; exit 1; }
+          [ $c -eq 2 ] && echo "::warning::SOFT — human must review"; true
+      - name: commit-msg + PR-metadata scan
+        env: { PR_TITLE: "${{ github.event.pull_request.title }}", PR_BODY: "${{ github.event.pull_request.body }}" }
+        run: |
+          set +e
+          git log --format=%B origin/main..HEAD > /tmp/m.txt 2>/dev/null || true
+          printf '%s\n%s\n' "$PR_TITLE" "$PR_BODY" >> /tmp/m.txt
+          node scripts/redaction-scan.js /tmp/m.txt; [ $? -eq 1 ] && { echo "::error::secret in commit/PR metadata"; exit 1; }; true
+      - name: gitleaks (history + diff)
+        uses: gitleaks/gitleaks-action@v2   # public repo 免費
