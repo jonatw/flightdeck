@@ -27,3 +27,5 @@ jobs:
           node scripts/redaction-scan.js /tmp/m.txt; [ $? -eq 1 ] && { echo "::error::secret in commit/PR metadata"; exit 1; }; true
       - name: gitleaks (history + diff)
         uses: gitleaks/gitleaks-action@v2   # public repo 免費
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}   # v2 掃 PR 硬需求(action README);僅 contents/PR read
