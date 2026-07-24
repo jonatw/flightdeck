@@ -42,9 +42,10 @@ well-behaved.
 - The scoping goes finer than per-service. One control role can write to a
   specific storage prefix but is *deliberately denied* a sibling prefix reserved
   for a human-only setting. Least privilege drawn per-path, not just per-resource.
-- Producers authenticate with **GitHub OIDC roles**, not static access keys;
-  real secrets live in **SSM Parameter Store** as SecureString and never appear
-  in a public repo's CI. Static long-lived keys are the exception, not the norm,
+- Producers authenticate with **GitHub OIDC roles**, not static access keys —
+  each pinned by its trust policy to one repo and branch (the `sub` claim; a
+  wildcard there would let *any* workflow assume the role). Real secrets live in
+  **SSM Parameter Store** as SecureString and never appear in a public repo's CI. Static long-lived keys are the exception, not the norm,
   and when one exists it's scoped narrowly enough that a leak's blast radius is
   small — small, not zero, and only as small as the policy behind it is correct.
 
@@ -62,7 +63,10 @@ Import a role as immutable and CDK won't generate a policy resource for it — t
 (the code says exactly that). No error is raised — CDK just quietly drops them —
 so a green merge does **not** mean the IAM change took effect; the actual grant
 has to be made by hand. This is the kind of thing
-that costs an afternoon the first time, because everything *looks* deployed.
+that costs an afternoon the first time, because everything *looks* deployed. (If
+you genuinely need to grant an imported role, the move that actually works is to
+push the permission onto the *resource's* own policy — a bucket policy, say —
+rather than the role's.)
 
 **Renaming a scheduled rule is a replacement, not an update.** Change an
 EventBridge rule's name and CloudFormation deletes the old one and creates a new
