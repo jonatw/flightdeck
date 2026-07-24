@@ -1,0 +1,48 @@
+name: link-audit
+on:
+  schedule:
+    - cron: "17 6 * * *"        # daily, off the top of the hour
+  pull_request:
+    paths: ["**/*.md"]
+  workflow_dispatch:             # manual run behaves like the daily leg (rehearsal)
+permissions:
+  contents: read
+  issues: write
+jobs:
+  links:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Link check
+        id: lychee
+        uses: lycheeverse/lychee-action@v2.9.0
+        with:
+          args: >-
+            --no-progress --max-retries 3 --retry-wait-time 5
+            --accept 200,206,429 "**/*.md"
+          fail: false            # verdict handled per-trigger below
+
+      - name: Fail PR on broken links
+        if: github.event_name == 'pull_request' && steps.lychee.outputs.exit_code != 0
+        run: |
+          echo "::error::broken links found (see job summary)"
+          exit 1
+
+      # Daily / manual leg: one open tracking issue, updated in place — a
+      # persistent broken link must not open a new issue every night.
+      - name: Find existing tracking issue
+        id: tracking
+        if: github.event_name != 'pull_request' && steps.lychee.outputs.exit_code != 0
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: echo "number=$(gh issue list --label broken-links --state open --json number --jq '.[0].number // empty')" >> "$GITHUB_OUTPUT"
+
+      - name: Open or update tracking issue
+        if: github.event_name != 'pull_request' && steps.lychee.outputs.exit_code != 0
+        uses: peter-evans/create-issue-from-file@v6.0.0
+        with:
+          title: "🔗 Broken links found by link-audit"
+          content-filepath: ./lychee/out.md
+          labels: broken-links
+          issue-number: ${{ steps.tracking.outputs.number }}

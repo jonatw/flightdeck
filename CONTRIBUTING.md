@@ -33,7 +33,9 @@ instance-level — cut it or lift it to the role level.
    denylist (it only knows hashes) — treat CI as a floor, your local run as the
    real net.
 5. **PR** — open one; CI runs the redaction check on the diff, commit messages,
-   and PR metadata.
+   and PR metadata. PRs touching markdown also get a link check (lychee); a
+   daily run re-checks the whole repo for link rot and keeps one tracking
+   issue updated.
 6. **Human gate** — a human reads the scanner report (SOFT warnings included),
    not just the green check, then merges.
 
