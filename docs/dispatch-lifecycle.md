@@ -113,7 +113,7 @@ The reason recovery watches *progress* and not *uptime* is a scar — see
 ## Other ways to wire the same idea
 
 Label-driven scale-to-zero isn't the only shape. A couple of variants (thanks to
-Pahud, who sketched these):
+[Pahud](https://github.com/pahud), who sketched these):
 
 - **Metric-driven** — every minute, publish the open-order *count* as a metric
   (`0 0 1 2 2 1 0 …`) and let the platform's own autoscaler bring the service up

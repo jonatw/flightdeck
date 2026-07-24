@@ -229,7 +229,8 @@ that's a PR, not an argument — I'll add you.
 - **[openab](https://github.com/openabdev/openab)** — the open-source project the
   whole fleet runs on. None of this exists without it. Huge shout-out to the
   project and everyone building it.
-- **Special thanks to Pahud** — for explaining the PR-review-as-CI pattern
+- **Special thanks to [Pahud](https://github.com/pahud)** — for explaining the
+  PR-review-as-CI pattern
   (aggregated red/yellow/green verdict, scheduled re-check, no standing compute)
   that the review flow here is built on.
 
