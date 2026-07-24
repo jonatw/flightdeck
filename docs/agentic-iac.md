@@ -27,7 +27,12 @@ code that started clean.
   deploys. The gap between the two is the whole safety model.
 
 It's the same principle as [the control bridge](control-bridge.md), one level up:
-the agent gets to *ask*, never to *act* directly on the cloud.
+the agent gets to *ask*, never to *act* directly on the cloud. Be honest about
+what that means: **the human merge is the only hard gate.** An agent that writes
+CDK and IAM is not holding a small privilege — the moment a reviewer waves a PR
+through, that PR's intent becomes real infrastructure. The safety lives in branch
+protection, review, and the deploy role's own policy, not in the agent being
+well-behaved.
 
 ## The roles the agent writes (least privilege)
 
@@ -40,8 +45,8 @@ the agent gets to *ask*, never to *act* directly on the cloud.
 - Producers authenticate with **GitHub OIDC roles**, not static access keys;
   real secrets live in **SSM Parameter Store** as SecureString and never appear
   in a public repo's CI. Static long-lived keys are the exception, not the norm,
-  and when one exists it's scoped so narrowly that a leak can only do one trivial
-  thing.
+  and when one exists it's scoped narrowly enough that a leak's blast radius is
+  small — small, not zero, and only as small as the policy behind it is correct.
 
 ## The scars — what bites when an agent drives CDK
 
@@ -54,8 +59,9 @@ catches up to reality quietly.
 **An imported role is read-only, and adding a policy to it silently does nothing.**
 Import a role as immutable and CDK won't generate a policy resource for it — the
 "add this permission" calls become *a permission inventory, not a deployment*
-(the code says exactly that). So a green merge does **not** mean the IAM change
-took effect; the actual grant has to be made by hand. This is the kind of thing
+(the code says exactly that). No error is raised — CDK just quietly drops them —
+so a green merge does **not** mean the IAM change took effect; the actual grant
+has to be made by hand. This is the kind of thing
 that costs an afternoon the first time, because everything *looks* deployed.
 
 **Renaming a scheduled rule is a replacement, not an update.** Change an
@@ -63,18 +69,24 @@ EventBridge rule's name and CloudFormation deletes the old one and creates a new
 one — a few seconds with no rule at all. Harmless for a once-a-minute reconcile;
 worth knowing before you rename something that can't blink.
 
-**An agent can't cleanly manage its own home.** The infra agent's *own* service
-was itself brought under CDK as a zero-diff import — an agent editing the stack
-that runs the agent is a reflexive edge you tread around deliberately, not a
-thing you let it do casually.
+**An agent proposing changes to its own home is the sharpest edge.** Nothing
+stops the infra agent from opening a PR against the very stack that runs it — its
+own service was itself brought under CDK as a zero-diff import. It can *propose*
+that change; what it can't do is *merge* it. This is exactly where a rubber-stamp
+review is most dangerous, and exactly why the human authorization gate is the
+whole game.
 
 ## Why let an agent near IaC at all
 
 Because the discipline that makes it safe is discipline you want regardless:
 propose-by-PR, reviewed, human-merges-to-deploy, least-privilege roles, secrets
-in a parameter store. The agent gets no fast lane — it goes through the same gate
-a human PR does, and the gate is where the safety is. What you gain is infra
-drafted at machine speed and shipped at human judgement.
+in a parameter store. Under the current repo, CI, and deploy path there's no
+known fast lane — the agent goes through the same gate a human PR does, and the
+gate is where the safety is. What you gain is infra drafted at machine speed and
+shipped at human judgement.
+
+**An agent can author infrastructure; a human authorizes it. If that
+authorization ever becomes a rubber stamp, the safety model collapses.**
 
 ---
 
