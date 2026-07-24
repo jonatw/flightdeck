@@ -26,11 +26,15 @@ flowchart LR
 
 - The **agent** has `curl` and a token in a file. No cloud SDK, no access key,
   nothing else. That's the whole client.
-- A **control Lambda** sits behind a Function URL. The bearer token authenticates
-  the call; the Lambda does one job — start / stop / status of a service it
-  manages.
-- The Lambda's **IAM role** — not the agent — carries the cloud permission, and
-  that permission is scoped to the bone (below).
+- A **control Lambda** sits behind a [Lambda **function URL**](https://docs.aws.amazon.com/lambda/latest/dg/lambda-urls.html)
+  configured with [`AuthType: NONE`](https://docs.aws.amazon.com/lambda/latest/dg/urls-auth.html) —
+  Lambda itself does no IAM authentication, so the endpoint is reachable from
+  anywhere. Authentication is an **application-layer bearer token** the Lambda's
+  handler checks on every call. The Lambda does one job — start / stop / status
+  of a service it manages.
+- The Lambda's [**IAM execution role**](https://docs.aws.amazon.com/lambda/latest/dg/lambda-intro-execution-role.html) —
+  not the agent — carries the cloud permission, and it's scoped to the bone
+  (below).
 
 Three checks stack: the **token** (can you call the function at all?), the
 **Lambda's own logic** (is this a start/stop/status for a service it manages?),
@@ -61,19 +65,23 @@ the client is the thing you're worried about.**
 
 ## The Lambda's role (least privilege)
 
-This is where the actual boundary lives. The Lambda's execution role can do only:
+This is where the actual boundary lives, and it's a straight application of
+[least-privilege permissions](https://docs.aws.amazon.com/IAM/latest/UserGuide/best-practices.html#grant-least-privilege).
+The execution role can do only:
 
-- a **specific action or two** — set a service's desired count, describe a
-  service —
-- on an **allow-list of exactly the service ARNs** it manages — never `*`.
+- a **specific action or two** — [`ecs:UpdateService`](https://docs.aws.amazon.com/AmazonECS/latest/APIReference/API_UpdateService.html)
+  to set a service's `desiredCount`, `ecs:DescribeServices` to read its state —
+- on the policy's `Resource` set to an **allow-list of exactly the service
+  [ARNs](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference-arns.html)**
+  it manages — never `*`.
 
 Nothing else. No read of other services, no other API, no wildcard resource.
 Bringing a new service under control means adding its ARN to that allow-list — an
 explicit, reviewable change, not an automatic grant.
 
-And the role uses the Lambda's own temporary execution credentials, so there's no
-long-lived access key anywhere in the path — not on the agent, not in the
-function.
+And because the permission rides on the Lambda's execution role, the function
+runs on **short-lived, auto-rotated credentials** — there's no long-lived access
+key anywhere in the path, not on the agent and not in the function.
 
 ## Blast radius
 
