@@ -24,7 +24,9 @@ jobs:
           set +e
           git log --format=%B origin/main..HEAD > /tmp/m.txt 2>/dev/null || true
           printf '%s\n%s\n' "$PR_TITLE" "$PR_BODY" >> /tmp/m.txt
-          node scripts/redaction-scan.js /tmp/m.txt; [ $? -eq 1 ] && { echo "::error::secret in commit/PR metadata"; exit 1; }; true
+          node scripts/redaction-scan.js /tmp/m.txt; c=$?
+          [ $c -eq 1 ] && { echo "::error::secret in commit/PR metadata"; exit 1; }
+          [ $c -eq 2 ] && echo "::warning::SOFT hit in commit/PR metadata — human must review"; true
       - name: gitleaks (history + diff)
         uses: gitleaks/gitleaks-action@v2   # public repo 免費
         env:

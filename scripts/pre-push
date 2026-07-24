@@ -1,0 +1,31 @@
+#!/bin/sh
+# flightdeck pre-push hook — runs the redaction scan WITH the local private
+# denylist, the one net the public CI can't run (it only knows hashes).
+#
+# Install once:   cp scripts/pre-push .git/hooks/pre-push && chmod +x .git/hooks/pre-push
+# Denylist file:  $FLIGHTDECK_DENYLIST, default ~/.flightdeck/denylist.txt
+#                 (one private term per line, # comments — lives OUTSIDE the
+#                 repo, never committed).
+#
+# HARD hit blocks the push. SOFT warnings print but allow it, matching CI
+# semantics — read them before you push again.
+
+DENY="${FLIGHTDECK_DENYLIST:-$HOME/.flightdeck/denylist.txt}"
+TOP="$(git rev-parse --show-toplevel)"
+
+if [ ! -f "$DENY" ]; then
+  echo "pre-push: denylist not found at $DENY — refusing to push." >&2
+  echo "pre-push: create it (one private term per line) or point FLIGHTDECK_DENYLIST at it." >&2
+  exit 1
+fi
+
+node "$TOP/scripts/redaction-scan.js" "$TOP" --denylist "$DENY"
+rc=$?
+if [ "$rc" -eq 1 ]; then
+  echo "pre-push: HARD redaction hit — push blocked." >&2
+  exit 1
+fi
+if [ "$rc" -eq 2 ]; then
+  echo "pre-push: SOFT warnings above — human review expected before merge." >&2
+fi
+exit 0
