@@ -33,6 +33,12 @@ const HASH_DENY = new Set([
   "fa4f1b2d35594b04","4e5c0efbba9074ce","e1f7c2a508289633","a1d58275d03b37f2",
   "5b342b4db3d71a90","b5c96b47fa309bb7","24f93dc159383ed5","2a3588e0c20e3126",
   "e650c0422c2e4f32","de232c11f1b3fd3d",
+  // non-ASCII identifiers (hashed same way; matched via the windowed non-ASCII
+  // tokenizer below — CJK prose has no word boundaries, so runs alone miss
+  // names embedded mid-sentence):
+  "ce6acd71a766239f","203269c353303fba","a8edfdbe387405e5","fcc6f2a8f7d93448",
+  "d88fbbe269ef2639","72dfb4d8d86a3aa4","6008adb54f803b55","abc1fc2e3bbae7bc",
+  "970d69ad21de1cc8","c3e4ebadf0bc8e0c","b8732df2dff589c0",
 ]);
 const sha16 = s => crypto.createHash("sha256").update(s.toLowerCase()).digest("hex").slice(0, 16);
 
@@ -47,6 +53,10 @@ const HARD = {
   "Private key block":       /-----BEGIN (?:RSA |EC |OPENSSH |PGP |DSA )?PRIVATE KEY-----/,
   "Google API key":          /\bAIza[0-9A-Za-z\-_]{35}\b/,
   "Generic bearer/secret =": /\b(?:api[_-]?key|secret|password|passwd|token|bearer)\b\s*[:=]\s*['"]?[A-Za-z0-9\-_.\/+]{12,}/i,
+  // connection-string / URI userinfo (user:pass@host) — no keyword nearby, and
+  // passwords under 24 chars slip the entropy net, so this needs its own rule.
+  // Password-less URLs (https://host, ssh://git@host) don't match.
+  "URI-embedded credential": /\b[a-z][a-z0-9+.-]*:\/\/[^\s:@\/]+:[^\s@\/]+@/i,
 };
 const SOFT = {
   "12-digit (poss. AWS acct id)":   /\b\d{12}\b/,
@@ -60,17 +70,34 @@ function shannon(s) {
   const f = {}; for (const c of s) f[c] = (f[c] || 0) + 1;
   let h = 0; for (const c in f) { const p = f[c] / s.length; h -= p * Math.log2(p); } return h;
 }
+// CI logs on a public repo are public — context printed with a hit must never
+// contain the matched value itself. file:line locates it for the human.
+const redact = (line, re) =>
+  line.replace(new RegExp(re.source, re.flags.includes("g") ? re.flags : re.flags + "g"), "«redacted»")
+      .trim().slice(0, 80);
 function entropyHits(line) {
   const out = [];
   for (const m of line.matchAll(/[A-Za-z0-9+/=_-]{24,}/g))
-    if (shannon(m[0]) >= 4.2) out.push("high-entropy token (" + m[0].length + " chars)");
+    if (shannon(m[0]) >= 4.2)
+      out.push(["high-entropy token (" + m[0].length + " chars)",
+                line.split(m[0]).join("«redacted»").trim().slice(0, 80)]);
   return out;
 }
 function hashHits(line) {
-  const out = [];
-  for (const m of line.matchAll(/[A-Za-z0-9._-]{4,64}/g)) {
-    const hp = sha16(m[0]);
-    if (HASH_DENY.has(hp)) out.push("denylist hash-match " + hp);
+  const out = [], seen = new Set();
+  const check = t => {
+    const hp = sha16(t);
+    if (HASH_DENY.has(hp) && !seen.has(hp)) { seen.add(hp); out.push("denylist hash-match " + hp); }
+  };
+  for (const m of line.matchAll(/[A-Za-z0-9._-]{4,64}/g)) check(m[0]);
+  // Non-ASCII (e.g. CJK) identifiers: no word boundaries in CJK prose, so hash
+  // every 2..8-codepoint window inside each non-ASCII run — a name embedded
+  // mid-sentence still matches. Windowing is cheap at this repo's scale.
+  for (const m of line.matchAll(/[^\x00-\x7F\s]{2,64}/gu)) {
+    const run = [...m[0]];
+    for (let i = 0; i < run.length; i++)
+      for (let len = 2; len <= 8 && i + len <= run.length; len++)
+        check(run.slice(i, i + len).join(""));
   }
   return out;
 }
@@ -102,14 +129,14 @@ for (const f of files(root)) {
     continue;
   }
   buf.toString("utf8").split("\n").forEach((line, i) => {
-    const n = i + 1, ctx = line.trim().slice(0, 80), allowed = ALLOW.test(line);
+    const n = i + 1, allowed = ALLOW.test(line);
     for (const h of hashHits(line)) hard.push([f, n, h, "(value redacted)"]);
     specific.forEach((t, idx) => { if (line.toLowerCase().includes(t.toLowerCase()))
       hard.push([f, n, `denylist rule #${idx + 1}`, "(value redacted)"]); });
     if (allowed) return;
-    for (const [name, re] of Object.entries(HARD)) if (re.test(line)) hard.push([f, n, name, ctx]);
-    for (const e of entropyHits(line)) soft.push([f, n, e, ctx]);
-    for (const [name, re] of Object.entries(SOFT)) if (re.test(line)) soft.push([f, n, name, ctx]);
+    for (const [name, re] of Object.entries(HARD)) if (re.test(line)) hard.push([f, n, name, redact(line, re)]);
+    for (const [name, rctx] of entropyHits(line)) soft.push([f, n, name, rctx]);
+    for (const [name, re] of Object.entries(SOFT)) if (re.test(line)) soft.push([f, n, name, redact(line, re)]);
   });
 }
 
