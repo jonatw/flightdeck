@@ -34,6 +34,31 @@ through, that PR's intent becomes real infrastructure. The safety lives in branc
 protection, review, and the deploy role's own policy, not in the agent being
 well-behaved.
 
+## In the hangar
+
+If the fleet flies a [traffic pattern](dispatch-lifecycle.md), this is where it
+gets maintained — on the ground, before it flies again. Same honest caveat:
+flavor, not the mechanism.
+
+- The IaC repo is the **hangar**, and the goal of everything done in it is a
+  system that stays **airworthy** — serviceable, deployable, fit to fly.
+- A bug or drift is a **snag**. You don't fix every snag before the next flight;
+  you can defer it on the **MEL** (Minimum Equipment List), which carries a
+  *rectification interval* — a known snag may ride for a bounded time (roughly
+  Cat B = 3 days, C = 10, D = 120) before it **must** be fixed or the aircraft
+  can't dispatch. Deferring infra work is exactly that: a logged snag with a
+  clock on it, not a shrug.
+- The infra agent **turns the wrench** — it does the maintenance and writes the
+  CDK. What it cannot do is sign the aircraft back into service. A
+  [**Certificate of Release to Service**](https://skybrary.aero/articles/certificate-release-service-crs)
+  may only be issued by authorised certifying staff, and it certifies *the
+  specific work done* — not that the whole aircraft is perfect. That's the human
+  merge: a person signs the release, for that one change.
+
+Which is the rule this whole doc keeps landing on, now in a mechanic's words:
+**an agent can do the work; only an authorised signature returns the aircraft to
+service.**
+
 ## The roles the agent writes (least privilege)
 
 - Every executor's task role is scoped to the bone — the phrase that recurs in
