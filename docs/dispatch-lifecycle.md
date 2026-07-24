@@ -44,6 +44,25 @@ and boring, not a clever in-memory scheduler.
 
 ---
 
+## In the pattern
+
+flightdeck earns its name here. None of this is literally air traffic control —
+but the lifecycle maps onto a **traffic pattern** cleanly enough that it's how I
+picture it. Flavor, not the mechanism:
+
+- **Cleared for takeoff** — an issue gets labelled; the executor spins up and departs.
+- **Flying the pattern** — it's out on the circuit, working the task.
+- **Turning final** — the pull request is up, on approach.
+- **Touchdown, taxi clear** — merged, and the executor is back on the ground (scaled to zero).
+- **Extended downwind, tower calls you back** — a task still airborne after too long gets recalled to land and split, instead of burning fuel in the circuit.
+- **Go-around** — changes requested: not cleared to land yet; climb out and come around for another approach.
+- **Lost comms** — a hung executor stops answering, and the watchdog steps in to bring it home.
+
+The controller working the tower is the Lead; you're pilot-in-command — which is
+why *the human still lands the plane.*
+
+---
+
 ## 1. Work orders are issues
 
 A unit of work is a GitHub issue labelled for a lane. No label, no work. This
