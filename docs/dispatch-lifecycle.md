@@ -16,14 +16,14 @@ Work is tracked by **labels on a GitHub issue**. The label *is* the state — th
 is no separate database of who's doing what.
 
 ```mermaid
-stateDiagram-v2
-    [*] --> agent_lane: labelled agent:<lane>
-    agent_lane --> panel_review: executor opens PR (handoff)
-    panel_review --> [*]: human merges
-    agent_lane --> needs_human: stuck, kicked twice
-    agent_lane --> needs_split: ran too long
-    needs_split --> agent_lane: split into smaller orders
-    panel_review --> agent_lane: changes requested
+flowchart TD
+    start(["issue created"]) -->|"labelled for a lane"| A["agent:lane"]
+    A -->|"opens PR"| R["panel-review"]
+    R -->|"human merges"| done(["merged"])
+    R -->|"changes requested"| A
+    A -->|"stuck twice"| H["needs-human"]
+    A -->|"ran too long"| S["needs-split"]
+    S -->|"split up"| A
 ```
 
 - `agent:<lane>` — there is open work for this lane. **An executor should exist.**
