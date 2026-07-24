@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/flightdeck-banner.jpg" alt="Vintage-poster illustration of flightdeck's chain of command: a secret agent points an order to a heroic eagle, which relays it to a grinning slowpoke piloting a small propeller trainer aircraft — human directs the lead, the lead directs the executor." width="100%">
+</p>
+
 # flightdeck
 
 > Running a fleet of AI agents in production — the human still lands the plane.
