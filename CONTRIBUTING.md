@@ -16,6 +16,12 @@ the building blocks freely — the stack isn't the secret. Never write:
 If a sentence stops being true when you swap a machine or rotate a key, it's
 instance-level — cut it or lift it to the role level.
 
+**Images.** The scanner is blind inside binaries, so images are flagged SOFT, not
+blocked — which means *a human must confirm nothing secret is rendered inside
+them*. No screenshots of terminals or dashboards. Keep committed images in
+`assets/`, and prefer text-based diagrams (Mermaid) wherever a picture would
+otherwise be an image.
+
 ## The writing pipeline
 
 1. **Trigger** — a question ("how do you do X?"), a lesson, a milestone. A real

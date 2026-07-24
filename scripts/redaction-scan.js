@@ -125,7 +125,14 @@ const hard = [], soft = [];
 for (const f of files(root)) {
   let buf; try { buf = fs.readFileSync(f); } catch { continue; }
   if (buf.subarray(0, 8192).includes(0)) {
-    hard.push([f, 0, "binary file — scanner blind, manual review required", "(not text)"]);
+    // The scanner is blind inside binaries. Image files are allowed but flagged
+    // SOFT — a human must confirm no secret is embedded/rendered (no terminal or
+    // dashboard screenshots). Any other binary stays HARD (unexpected, block it).
+    const isImage = /\.(png|jpe?g|gif|webp|avif|ico|bmp)$/i.test(f);
+    (isImage ? soft : hard).push([f, 0,
+      isImage ? "image — scanner blind, human must confirm no embedded secret"
+              : "binary file — scanner blind, manual review required",
+      "(not text)"]);
     continue;
   }
   buf.toString("utf8").split("\n").forEach((line, i) => {
