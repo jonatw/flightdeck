@@ -20,11 +20,13 @@ flowchart TD
     start(["issue created"]) -->|"labelled for a lane"| A["agent:lane"]
     A -->|"opens PR"| R["panel-review"]
     R -->|"human merges"| done(["merged"])
-    R -->|"changes requested"| A
     A -->|"stuck twice"| H["needs-human"]
     A -->|"ran too long"| S["needs-split"]
-    S -->|"split up"| A
 ```
+
+Two transitions loop back to `agent:<lane>` and are left off the diagram to keep
+it clean: a PR sent back with **changes requested**, and a **needs-split** issue
+re-entering as smaller orders.
 
 - `agent:<lane>` — there is open work for this lane. **An executor should exist.**
 - `panel-review` — the executor handed off a PR. **The executor is done; no
@@ -95,6 +97,24 @@ layers:
 
 The reason recovery watches *progress* and not *uptime* is a scar — see
 [the lessons](#the-scars-that-shaped-this).
+
+---
+
+## Other ways to wire the same idea
+
+Label-driven scale-to-zero isn't the only shape. A couple of variants (thanks to
+Pahud, who sketched these):
+
+- **Metric-driven** — every minute, publish the open-order *count* as a metric
+  (`0 0 1 2 2 1 0 …`) and let the platform's own autoscaler bring the service up
+  while the count is above zero and back down when it hits zero. Passive rather
+  than active, same outcome.
+- **Board-driven** — route new issues and PRs onto a project board; a card
+  landing in an *incoming* column is the signal to scale up, and an empty column
+  scales back down. The board doubles as a visible queue you can watch move.
+
+This repo runs the reconcile-loop version above, but any of these gets you the
+"pay only when there's work" property.
 
 ---
 
