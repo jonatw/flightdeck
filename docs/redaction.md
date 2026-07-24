@@ -5,6 +5,21 @@ door-number-dense sources like real infrastructure code. So there's a gate that
 runs before anything lands, built on one assumption: **the writer will
 eventually slip.** Design for that and the slip is a non-event. Here's the gate.
 
+## The manifest
+
+If the docs are the passengers, redaction is the airport. Flavor, not the
+mechanism:
+
+Everything that boards — every line headed for a public repo — clears **security
+screening** first. The scanner is the checkpoint, and contraband (a credential, a
+key, a secret rendered into an image) doesn't get on the aircraft.
+
+But screening isn't the whole job — the passengers also fly **anonymous.** The
+manifest carries them without exposing who they really are: the roles fly, while
+the real names, tail numbers, and hangar addresses stay on the ground. A reader
+sees *a lead directs an executor*, never the machine, the account, or the private
+repo behind it. Screened at the gate, and travelling under a role, not a name.
+
 ## Why *before* the push, not after
 
 A public repo means one slip is a public leak — and deleting it doesn't undo it.
