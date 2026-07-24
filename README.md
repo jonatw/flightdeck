@@ -83,6 +83,12 @@ One agent per **lane** (a domain of work). Each runs on an elastic cloud node,
 is scoped to its lane and nothing else, and actually writes and pushes code.
 Add capacity by adding lanes, not by cloning one agent.
 
+Each lane is its own **region of airspace**: it flies under its own flight
+rules — its scope, its conventions, what it's cleared to touch — and an executor
+is qualified for that region and no other. The procedures an agent follows — its
+**skills** — are its operations manual: the standard way to do the job, not
+improvised each run.
+
 ---
 
 ## How work flows
