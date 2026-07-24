@@ -5,15 +5,19 @@ a human babysitting the executors in between. This is the part people ask about
 most, so it gets the most detail.
 
 The whole thing runs on one idea: **an executor is not a server you keep alive.
-It's a thing you bring into existence when there's work, and let disappear when
-there isn't.** Everything below falls out of that.
+It's a short-lived instance you bring into existence when there's work, and let
+disappear when there isn't.** Its identity is the *lane* it serves, not a
+machine — there's no long-lived box to point at. Everything below falls out of
+that.
 
 ---
 
 ## The state machine
 
-Work is tracked by **labels on a GitHub issue**. The label *is* the state — there
-is no separate database of who's doing what.
+Work is tracked by **labels on a GitHub issue**. The label *is* the control-plane
+state — whether an executor should exist — with no separate database of who's
+doing what. (The executor has its own runtime state while it works; the labels
+don't try to capture that, only whether one should be up.)
 
 ```mermaid
 flowchart TD
@@ -34,8 +38,9 @@ re-entering as smaller orders.
 - `needs-human` — something went wrong twice; a person should look.
 - `needs-split` — the work was too big for one pass; break it up.
 
-Read the labels and you know the exact state of the fleet. That's deliberate:
-the source of truth is public and boring, not a clever in-memory scheduler.
+Read the labels and you know the control-plane state of the fleet — who should be
+up, who's waiting, who's stuck. That's deliberate: the source of truth is public
+and boring, not a clever in-memory scheduler.
 
 ---
 
@@ -48,13 +53,16 @@ agent can do from anywhere, with no special client.
 ## 2. Ground control brings an executor online
 
 Nothing polls "is there work?" on a running box. Instead a small **reconcile
-loop** (a function on a one-minute schedule) answers one question per lane:
+loop** (a function on a one-minute schedule) applies one rule per lane:
 
-> Is there an open `agent:<lane>` issue? → run **one** executor. Otherwise →
-> run **zero**.
+> Is there an open `agent:<lane>` issue? → desired count **one**. Otherwise →
+> **zero**.
 
-That's the entire autoscaler. The desired count is a pure function of the open
-work orders. You pay only for executors that have something to do.
+That's the whole autoscaler — desired count as a function of the open work
+orders. It's **one executor per lane, not one per issue**: several open orders
+for the same lane still mean a single instance, working them in turn. The rule is
+deliberately simple — it's the current policy, not a law of physics — and you pay
+only for executors that have something to do.
 
 ## 3. The executor works and opens a PR
 
@@ -64,9 +72,10 @@ opens a pull request. It writes and pushes code; it does not merge.
 ## 4. Handoff: relabel, then spin down
 
 When the PR is up, the label flips from `agent:<lane>` to `panel-review`. That
-relabel is the signal that means **"I'm done — you can stop paying for me."** The
-reconcile loop sees no open `agent:<lane>` issue and scales the executor back to
-zero. Handoff and shutdown are the same event.
+relabel is the signal that means **"I'm done — you can stop paying for me."** On
+its next pass the reconcile loop sees no open `agent:<lane>` issue for that lane
+and scales the executor to zero. Handoff isn't a shutdown call — it's a label
+change that lets the *next* reconcile tick do the shutting down.
 
 ## 5. Review and the human gate
 
@@ -85,12 +94,13 @@ layers:
 
 - **Self-dispatch** — the reconcile loop above. Stateless: it re-derives desired
   count from the labels every minute, so it can't drift out of sync with reality.
-- **Recovery** — each executor runs a watchdog. It watches whether *work is
-  advancing* (are the on-disk progress files still changing?). If progress stalls
-  past a threshold, it wraps up, leaves a note on the issue, and recycles. If a
-  task runs far too long, it gets bounced to `needs-split` instead of burning
-  forever. Two failed recoveries in a row → `needs-human`, so a stuck job can't
-  loop on the meter.
+- **Recovery** — each executor runs a watchdog with *two separate clocks*. The
+  **progress clock** asks "is work still advancing?" (are the on-disk progress
+  files still changing?) — if it stalls past a threshold, the watchdog wraps up,
+  leaves a note on the issue, and recycles. The **duration clock** asks "has this
+  one task simply run too long?" regardless of progress — if so it's bounced to
+  `needs-split` instead of burning forever. Two failed recoveries in a row →
+  `needs-human`, so a stuck job can't loop on the meter.
 - **The tower** — the platform's own health check. If the watchdog itself dies,
   the platform notices the heartbeat stop and swaps the task out. Someone always
   watches the watcher.
