@@ -223,9 +223,16 @@ the door numbers are.
 
 ## Credits / prior art
 
-This stands on a lot of shoulders. A non-exhaustive list of the people and ideas
-I learned from lives here — and if you're missing from it, that's a PR, not an
-argument. I'll add you.
+This stands on a lot of shoulders. Non-exhaustive, and if you're missing from it
+that's a PR, not an argument — I'll add you.
+
+- **[openab](https://github.com/openabdev/openab)** — the open-source project the
+  whole fleet runs on. None of this exists without it. Huge shout-out to the
+  project and everyone building it.
+- **Special thanks to [Pahud](https://github.com/pahud)** — for explaining the
+  PR-review-as-CI pattern
+  (aggregated red/yellow/green verdict, scheduled re-check, no standing compute)
+  that the review flow here is built on.
 
 ---
 
