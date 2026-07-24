@@ -48,6 +48,12 @@ flavor, not the mechanism.
   Cat B = 3 days, C = 10, D = 120) before it **must** be fixed or the aircraft
   can't dispatch. Deferring infra work is exactly that: a logged snag with a
   clock on it, not a shrug.
+- Not everything can wait, though. A security update or a must-do change is an
+  [**Airworthiness Directive**](https://skybrary.aero/articles/airworthiness-directive) —
+  mandatory, from the authority, with a compliance deadline (an *emergency* AD
+  means *now*). Unlike an MEL snag you can't ride it out: an overdue AD grounds
+  the aircraft, and the release below **cannot even be signed** while one is
+  outstanding. A critical patch lands before anything else ships.
 - The infra agent **turns the wrench** — it does the maintenance and writes the
   CDK. What it cannot do is sign the aircraft back into service. A
   [**Certificate of Release to Service**](https://skybrary.aero/articles/certificate-release-service-crs)
