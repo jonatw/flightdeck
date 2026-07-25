@@ -88,7 +88,7 @@ flowchart TD
 - **⚠️ "Dynamic" needs a caveat.** Parameter Store has **no native rotation** (that's Secrets Manager). Its dynamic levers are **parameter policies** — `Expiration`/TTL + EventBridge notifications (Advanced tier) — and **versioning**. So it's a **scoped, TTL-capable, auditable *static carrier*,** not a rotation engine.
 - **🔗 How it sharpens *issuance*.** Put the mint-time inputs (audience / Tailscale client-id / tailnet config) behind scoped SSM paths, and *"which token a role may mint"* becomes *"which SSM path it may decrypt."* That's **scoped minting authority + TTL'd config + full audit** — the finer-grained control is genuine. The truly ephemeral part (the JWT, the tailnet token) still comes from STS/Tailscale, which are short-lived by construction.
 
-**A hardened variant of this is already deployed (my `SsmSecurityStack`):** it provisions **per-App customer-managed KMS keys** (replacing the default SSM key), grants each agent task role `kms:Decrypt` on **only its own** key, and wires **EventBridge + SNS** alerts on any read of the GitHub App-key parameters by a non-agent-role principal (`anything-but` the legit role ARNs). That's the scoped-vault shape — per-secret KMS isolation + least-privilege + audit — reusable to gate mint-time inputs. *(Stack deployed; exact secret storage paths omitted for this public copy.)* **[Today]**
+**A hardened variant of this is already deployed (my `SsmHardeningStack`):** it provisions **per-App customer-managed KMS keys** (replacing the default SSM key), grants each agent task role `kms:Decrypt` on **only its own** key, and wires **EventBridge + SNS** alerts on any read of the GitHub App-key parameters by a non-agent-role principal (`anything-but` the legit role ARNs). That's the scoped-vault shape — per-secret KMS isolation + least-privilege + audit — reusable to gate mint-time inputs. *(Stack deployed; exact secret storage paths omitted for this public copy.)* **[Today]**
 
 > Fits openab's standing preference: **SSM SecureString over Secrets Manager** — cheaper, KMS-isolated, path-scoped, audited; accept "no native rotation" as the trade and let STS/Tailscale supply the short-lived tokens.
 
@@ -96,25 +96,25 @@ flowchart TD
 
 ## 5. My current setup — one working Roles Anywhere architecture
 
-**This is my own current architecture, not an openab-official standard** — treat it as *a* working reference, not *the* prescribed way. Scenario 1 as I run it in my `EagleReadonlyStack`: the N200 panel-lead's read-only AWS telescope, which **doubles as the tailnet-minting identity**:
+**This is my own current architecture, not an openab-official standard** — treat it as *a* working reference, not *the* prescribed way. Scenario 1 as I run it in my `RaTelescopeStack`: my always-on lead host's read-only AWS telescope, which **doubles as the tailnet-minting identity**:
 
 - **Self-managed fleet CA.** Private key is **cold-stored offline** (not in any repo); only the **public CA cert** is registered as a `CERTIFICATE_BUNDLE` **trust anchor**.
-- **Leaf cert:** `CN=eagle-n200`, ~90-day validity, on the N200 host. Key never leaves it.
-- **Role trust bound to the CN.** `aws:PrincipalTag/x509Subject/CN == eagle-n200` — the same CA signing *another* leaf can't map into this role. Plus `sts:TagSession` + `sts:SetSourceIdentity` for the Roles Anywhere session tags.
+- **Leaf cert:** `CN=host-01`, ~90-day validity, on that host. Key never leaves it.
+- **Role trust bound to the CN.** `aws:PrincipalTag/x509Subject/CN == host-01` — the same CA signing *another* leaf can't map into this role. Plus `sts:TagSession` + `sts:SetSourceIdentity` for the Roles Anywhere session tags.
 - **Permissions:** `ViewOnlyAccess` baseline + named diagnostics (CloudTrail LookupEvents, Logs read, Cost Explorer read, Batch describe).
 - **DENY-5 (read-only, no secrets, no pivot):** `ssm:GetParameter*`, `secretsmanager:GetSecretValue`, `kms:Decrypt`, `s3:GetObject`, `sts:AssumeRole*`.
 - **The tailnet grant lives on this role:** `sts:GetWebIdentityToken`. **NOTAM:** this API is **outside the `AssumeRole*` family**, so DENY-5's `sts:AssumeRole*` deny does **not** block it — that's deliberate, but it means the permission must be reviewed on its own.
 - **Profile:** 1-hour sessions. **Renewal:** a daily countdown cron flags the leaf's expiry. **Revocation:** disable/delete the trust anchor and every leaf dies at once.
 
 ```python
-# EagleReadonlyStack (trimmed; account/ARNs redacted for this public copy)
-anchor = ra.CfnTrustAnchor(self, "FleetCaAnchor", name="openab-fleet-ca", enabled=True,
+# RaTelescopeStack (trimmed; account/ARNs redacted for this public copy)
+anchor = ra.CfnTrustAnchor(self, "FleetCaAnchor", name="fleet-ca", enabled=True,
     source=ra.CfnTrustAnchor.SourceProperty(
         source_type="CERTIFICATE_BUNDLE",
         source_data=ra.CfnTrustAnchor.SourceDataProperty(x509_certificate_data=FLEET_CA_PEM)))
 
-cn = {"StringEquals": {"aws:PrincipalTag/x509Subject/CN": "eagle-n200"}}
-role = iam.Role(self, "EagleReadonly", role_name="openab-eagle-readonly",
+cn = {"StringEquals": {"aws:PrincipalTag/x509Subject/CN": "host-01"}}
+role = iam.Role(self, "RaTelescope", role_name="ra-telescope-ro",
     assumed_by=iam.PrincipalWithConditions(iam.ServicePrincipal("rolesanywhere.amazonaws.com"), cn),
     managed_policies=[iam.ManagedPolicy.from_aws_managed_policy_name("job-function/ViewOnlyAccess")])
 role.assume_role_policy.add_statements(iam.PolicyStatement(
@@ -130,7 +130,7 @@ role.add_to_policy(iam.PolicyStatement(sid="DenySecretsAndPivot", effect=iam.Eff
              "sts:AssumeRole","sts:AssumeRoleWithSAML","sts:AssumeRoleWithWebIdentity"],
     resources=["*"]))
 
-profile = ra.CfnProfile(self, "EagleProfile", name="openab-eagle-readonly",
+profile = ra.CfnProfile(self, "RaProfile", name="ra-telescope-ro",
     enabled=True, duration_seconds=3600, role_arns=[role.role_arn])
 ```
 
@@ -209,7 +209,7 @@ tailscale up --client-id="<client-id>" --id-token="$(cat travel.jwt)" --advertis
 **NOTAMs:** `GetWebIdentityToken` sits **outside** `AssumeRole*` (a `Deny AssumeRole*` guard misses it — review separately). The issuing counter is **regional** — the STS *global* endpoint returns `InvalidAction`; call a regional endpoint or set `AWS_STS_REGIONAL_ENDPOINTS=regional`. Audience/duration condition keys not yet in request context → scope by single-purpose role + `resource: self`. Pin `Subject` to the precise role ARN; hand out the narrowest tag/scope.
 
 **Blast radius & residual risk (honest — from adversarial review).**
-- **CA private-key compromise is the sharpest risk.** The Roles Anywhere trust anchor is the root of S1: if the fleet CA private key leaks, an attacker signs an X.509 with `CN=eagle-n200` and impersonates the role — **CN-binding does not stop a CA-key holder** (they simply forge the CN). Mitigation in place: the CA key is **cold-stored offline** (never in a repo or on a networked host). Stronger still: an **HSM**. Contain with **short-lived leaves** + immediate **trust-anchor disable/delete** on suspicion (kills every leaf at once).
+- **CA private-key compromise is the sharpest risk.** The Roles Anywhere trust anchor is the root of S1: if the fleet CA private key leaks, an attacker signs an X.509 with `CN=host-01` and impersonates the role — **CN-binding does not stop a CA-key holder** (they simply forge the CN). Mitigation in place: the CA key is **cold-stored offline** (never in a repo or on a networked host). Stronger still: an **HSM**. Contain with **short-lived leaves** + immediate **trust-anchor disable/delete** on suspicion (kills every leaf at once).
   - **Hardening option (evaluated).** Back the CA with an **AWS KMS asymmetric key** (~$1/month): the signing key lives in a FIPS 140-2 L3 **HSM and is non-exportable** — there is **no key file to steal**, so this risk largely dissolves. Compromise then requires IAM `kms:Sign` access, which is **CloudTrail-audited and IAM-revocable** — a stronger posture than a cold-stored file, and ~400× cheaper than AWS Private CA (~$400/mo). Tools like `step-ca` support a KMS signer directly (an IAM role with `kms:GetPublicKey` + `kms:Sign` on the CA key). **Trade-off (known):** still **no real-time revocation of individual leaves** — but that's a Roles Anywhere limitation regardless (it honours *imported CRLs only*; no OCSP/CDP callbacks), so lean on **short-lived leaves** for passive revocation and kill the whole CA instantly by disabling the KMS key or the trust anchor.
 - **Bearer-token replay window.** The JWT and the tailnet token are bearer credentials — an intercepted, un-expired one is usable until it expires. Keep both lifetimes minimal. *Caveat:* the IAM lever to **enforce** a short cap (`sts:DurationSeconds`) is **not yet available** (see NOTAMs); today the cap is procedural (single-purpose role), not policy-enforced.
 - **Audience-lock gap.** Until the audience condition key ships, the minting role may request a token for **any** `aud`. Bound it with `resource: sts::<acct>:self` + a single-purpose role, and use **one minting role per audience/tailnet** — never share it. Pin Tailscale's `Subject` match to the exact role ARN so a reused ARN can't cross tailnets.
@@ -230,7 +230,7 @@ tailscale up --client-id="<client-id>" --id-token="$(cat travel.jwt)" --advertis
 | Interchangeable desks | traits `CredentialBackend`/`UpstreamClient`/`PolicyClassifier` | Proposed (`openabdev/octobroker#54`) |
 | Tailnet/AWS desk | a workload-identity `CredentialBackend` | Vision |
 | Civil registry / recognised seal | private CA as **Roles Anywhere trust anchor** | Today |
-| Birth certificate | short-lived **X.509** (`CN=eagle-n200`, TPM-sealable) | Today |
+| Birth certificate | short-lived **X.509** (`CN=host-01`, TPM-sealable) | Today |
 | Passport office → passport | **`aws_signing_helper` → CreateSession** | Today |
 | Issuing authority + seal registry | **AWS STS Outbound Identity Federation** (issuer + JWKS) | Today |
 | Machine-readable travel document | signed **OIDC JWT** from `sts:GetWebIdentityToken` | Today |
