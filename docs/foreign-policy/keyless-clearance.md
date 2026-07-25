@@ -13,7 +13,7 @@
 2. The border protocol (Legs A–C): passport → travel document → entry stamp
 3. Ways to arrive — the traveller's document is pluggable (4 scenarios + Mermaid)
 4. The scoped vault — SSM SecureString + scoped role (does it sharpen issuance?)
-5. How openab wires the house favourite today (real Roles Anywhere setup)
+5. My current setup — one working Roles Anywhere architecture
 6. octobroker — the Ministry of Foreign Affairs (Today / Proposed / Vision)
 7. Sequence diagram — one clearance, end to end
 8. Why we fly this way
@@ -66,7 +66,7 @@ flowchart TD
     IMM -->|"same stamp, every arrival"| TAG["Entry class = tag<br/>short-lived tailnet token"]
 ```
 
-- **S1 · The diplomatic passport (IAM Roles Anywhere).** *House favourite.* Traveller lives **off-cloud** (on-prem NUC, edge box, another cloud). Presents X.509 from your own CA. The only arrival that is keyless **and** works **anywhere** **and** binds to hardware you control — see §5 for how openab wires it. **[Today]**
+- **S1 · The diplomatic passport (IAM Roles Anywhere).** *House favourite.* Traveller lives **off-cloud** (on-prem NUC, edge box, another cloud). Presents X.509 from your own CA. The only arrival that is keyless **and** works **anywhere** **and** binds to hardware you control — see §5 for one working setup. **[Today]**
 - **S2 · The local-province passport (AWS-native identity).** Traveller **already inside AWS** — Fargate task role, EC2 instance profile, Lambda role, SSO. Skips the passport office; walks straight to the issuing counter. Fewest moving parts; often the shortest runway for openab's own Fargate crews. **[Today]**
 - **S3 · A valid token already in hand (any AWS creds).** Any SigV4-signable principal can request a travel document — assumed-role creds, an SSO token, even a legacy static key you're migrating off. Best as a **transition**. **[Today]**
 - **S4 · Arrive straight at immigration (skip AWS).** Tailscale honours its **own** documents — native OAuth client / auth-key — or a visa-waiver with a **non-AWS** government (GitHub Actions, GCP, Azure OIDC). No AWS detour. Trade-off: you give up the **AWS identity as a universal hub**. **[Today]**
@@ -94,9 +94,9 @@ flowchart TD
 
 ---
 
-## 5. How openab wires the house favourite today (real Roles Anywhere setup)
+## 5. My current setup — one working Roles Anywhere architecture
 
-Scenario 1, as actually deployed in `EagleReadonlyStack` (#174) — the N200 panel-lead's read-only AWS telescope, which **doubles as the tailnet-minting identity**:
+**This is my own current architecture, not an openab-official standard** — treat it as *a* working reference, not *the* prescribed way. Scenario 1 as I run it in `EagleReadonlyStack` (#174): the N200 panel-lead's read-only AWS telescope, which **doubles as the tailnet-minting identity**:
 
 - **Self-managed fleet CA.** Private key is **cold-stored offline** (not in any repo); only the **public CA cert** is registered as a `CERTIFICATE_BUNDLE` **trust anchor**.
 - **Leaf cert:** `CN=eagle-n200`, ~90-day validity, on the N200 host. Key never leaves it.
@@ -177,6 +177,8 @@ sequenceDiagram
 ---
 
 ## 9. Runbook & NOTAMs
+
+*(A **[NOTAM](https://skybrary.aero/articles/notice-airmen-notam)** — Notice to Air Missions — is aviation's pre-flight bulletin of hazards and "sharp edges"; here it flags the operational gotchas before you fly this.)*
 
 ```bash
 # One-time per account: turn STS into a recognised issuer
