@@ -88,7 +88,7 @@ flowchart TD
 - **⚠️ "Dynamic" needs a caveat.** Parameter Store has **no native rotation** (that's Secrets Manager). Its dynamic levers are **parameter policies** — `Expiration`/TTL + EventBridge notifications (Advanced tier) — and **versioning**. So it's a **scoped, TTL-capable, auditable *static carrier*,** not a rotation engine.
 - **🔗 How it sharpens *issuance*.** Put the mint-time inputs (audience / Tailscale client-id / tailnet config) behind scoped SSM paths, and *"which token a role may mint"* becomes *"which SSM path it may decrypt."* That's **scoped minting authority + TTL'd config + full audit** — the finer-grained control is genuine. The truly ephemeral part (the JWT, the tailnet token) still comes from STS/Tailscale, which are short-lived by construction.
 
-**openab has deployed a hardened variant — `SsmSecurityStack` (#97):** it provisions **per-App customer-managed KMS keys** (replacing the default SSM key), grants each agent task role `kms:Decrypt` on **only its own** key, and wires **EventBridge + SNS** alerts on any read of the GitHub App-key parameters by a non-agent-role principal (`anything-but` the legit role ARNs). That's the scoped-vault shape — per-secret KMS isolation + least-privilege + audit — reusable to gate mint-time inputs. *(Stack deployed; exact secret storage paths omitted for this public copy.)* **[Today]**
+**A hardened variant of this is already deployed (my `SsmSecurityStack`):** it provisions **per-App customer-managed KMS keys** (replacing the default SSM key), grants each agent task role `kms:Decrypt` on **only its own** key, and wires **EventBridge + SNS** alerts on any read of the GitHub App-key parameters by a non-agent-role principal (`anything-but` the legit role ARNs). That's the scoped-vault shape — per-secret KMS isolation + least-privilege + audit — reusable to gate mint-time inputs. *(Stack deployed; exact secret storage paths omitted for this public copy.)* **[Today]**
 
 > Fits openab's standing preference: **SSM SecureString over Secrets Manager** — cheaper, KMS-isolated, path-scoped, audited; accept "no native rotation" as the trade and let STS/Tailscale supply the short-lived tokens.
 
@@ -96,7 +96,7 @@ flowchart TD
 
 ## 5. My current setup — one working Roles Anywhere architecture
 
-**This is my own current architecture, not an openab-official standard** — treat it as *a* working reference, not *the* prescribed way. Scenario 1 as I run it in `EagleReadonlyStack` (#174): the N200 panel-lead's read-only AWS telescope, which **doubles as the tailnet-minting identity**:
+**This is my own current architecture, not an openab-official standard** — treat it as *a* working reference, not *the* prescribed way. Scenario 1 as I run it in my `EagleReadonlyStack`: the N200 panel-lead's read-only AWS telescope, which **doubles as the tailnet-minting identity**:
 
 - **Self-managed fleet CA.** Private key is **cold-stored offline** (not in any repo); only the **public CA cert** is registered as a `CERTIFICATE_BUNDLE` **trust anchor**.
 - **Leaf cert:** `CN=eagle-n200`, ~90-day validity, on the N200 host. Key never leaves it.
@@ -142,7 +142,7 @@ profile = ra.CfnProfile(self, "EagleProfile", name="openab-eagle-readonly",
 
 - **[Today]** octobroker runs the **GitHub-land** border. Traveller shows a **citizen ID** (`X-Octobroker-Key`) — all it carries — the ministry checks a **default-deny treaty-book** (which repos/tools) and issues a visa. Crucially, it does **not** hand over its own credential and it does **not** strip a broad token down: it **mints a fresh ~1-hour GitHub App installation token, already narrowed at mint time** to the **exact repositories** (via the API's `repositories` param) and a **minimal permission envelope** (a git-push credential gets only `contents:write` — no issues, PRs, Actions, or admin). **GitHub itself enforces both boundaries**, and MCP vs. git tokens are cache- and scope-isolated so a broader token can never satisfy a narrower request. The App private key never leaves the ministry; every issuance is **audit-logged**. The visa is stamped for specific cities and activities *before* it's handed over — no traveller holds a GitHub PAT. *(Verified against `openabdev/octobroker` `src/app_token.rs`.)*
 - **[Proposed]** RFC `openabdev/octobroker#54` (pluggable provider abstraction, by antigenius0910, 2026-07-24) extracts three traits — **`CredentialBackend`** / **`UpstreamClient`** / **`PolicyClassifier`** — so GitHub becomes *the first* desk, not the only hardcoded one. Explicitly a **pure refactor, no new provider, no config change, byte-identical wire behaviour.** It ships the **hinges**, not a second border.
-- **[Vision]** On those hinges, a **Tailnet/AWS desk** opens beside GitHub: a `CredentialBackend` that runs Legs A–C behind the **same** front counter (one citizen ID), **same** treaty-book (default-deny), **same** stamp log (audit). The fleet's foreign policy collapses to its ideal: **one ID, one ministry, every border on waiver.** **Important honesty:** openab has **not** adopted octobroker — its secret surface is broader than GitHub tokens (see the status note up top), so today it runs its **own** scoped vault + Roles Anywhere. This unified-ministry direction — pluggable broker (`#54`) + Roles Anywhere carrying the full secret surface — is an **open design thesis openab is exploring**, not a plan. The protocol in §2 works by hand today; a pluggable ministry is what *could* one day run it for you. **Cost of pluggability (honest):** every new provider is a new trust-critical surface — each `CredentialBackend` must inherit the *same* default-deny + audit invariants and be reviewed as carefully as the GitHub one. A pluggable broker multiplies the places a missed permission check becomes privilege escape; that review burden is the price of the design.
+- **[Vision]** On those hinges, a **Tailnet/AWS desk** opens beside GitHub: a `CredentialBackend` that runs Legs A–C behind the **same** front counter (one citizen ID), **same** treaty-book (default-deny), **same** stamp log (audit). The fleet's foreign policy collapses to its ideal: **one ID, one ministry, every border on waiver.** **Important honesty:** openab has **not** adopted octobroker — its secret surface is broader than GitHub tokens (see the status note up top), so today it runs its **own** scoped vault + Roles Anywhere. This unified-ministry direction — pluggable broker (`openabdev/octobroker#54`) + Roles Anywhere carrying the full secret surface — is an **open design thesis openab is exploring**, not a plan. The protocol in §2 works by hand today; a pluggable ministry is what *could* one day run it for you. **Cost of pluggability (honest):** every new provider is a new trust-critical surface — each `CredentialBackend` must inherit the *same* default-deny + audit invariants and be reviewed as carefully as the GitHub one. A pluggable broker multiplies the places a missed permission check becomes privilege escape; that review burden is the price of the design.
 
 ---
 
@@ -227,7 +227,7 @@ tailscale up --client-id="<client-id>" --id-token="$(cat travel.jwt)" --advertis
 | Citizen ID card | **`X-Octobroker-Key`** | Today |
 | Treaty-book / stamp log | octobroker **default-deny allowlist + audit** | Today |
 | GitHub-land visa | scoped, short-lived **GitHub App token** | Today |
-| Interchangeable desks | traits `CredentialBackend`/`UpstreamClient`/`PolicyClassifier` | Proposed (`#54`) |
+| Interchangeable desks | traits `CredentialBackend`/`UpstreamClient`/`PolicyClassifier` | Proposed (`openabdev/octobroker#54`) |
 | Tailnet/AWS desk | a workload-identity `CredentialBackend` | Vision |
 | Civil registry / recognised seal | private CA as **Roles Anywhere trust anchor** | Today |
 | Birth certificate | short-lived **X.509** (`CN=eagle-n200`, TPM-sealable) | Today |
@@ -237,7 +237,7 @@ tailscale up --client-id="<client-id>" --id-token="$(cat travel.jwt)" --advertis
 | Visa-waiver treaty | **Tailscale trust-credentials / federated identity** | Today |
 | Immigration officer | **Tailscale token-exchange** endpoint | Today |
 | Entry class / short-stay permit | the **tag** + short-lived **tailnet token** (TTL) | Today |
-| Scoped customs vault | **SSM SecureString + per-principal KMS + audit** (`#97`) | Today |
+| Scoped customs vault | **SSM SecureString + per-principal KMS + audit** | Today |
 
 ---
 
