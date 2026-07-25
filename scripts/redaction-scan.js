@@ -48,6 +48,7 @@ const HARD = {
   "GitHub PAT (classic)":    /\bghp_[A-Za-z0-9]{36}\b/,
   "GitHub PAT (fine)":       /\bgithub_pat_[A-Za-z0-9_]{22,}\b/,
   "GitHub OAuth/app token":  /\bgh[ousr]_[A-Za-z0-9]{36}\b/,
+  "GitHub app token (JWT)":  /\bghs_[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/,
   "Slack token":             /\bxox[baprs]-[A-Za-z0-9-]{10,}\b/,
   "Discord webhook":         /https:\/\/discord(?:app)?\.com\/api\/webhooks\/\d+\/[\w-]+/,
   "Private key block":       /-----BEGIN (?:RSA |EC |OPENSSH |PGP |DSA )?PRIVATE KEY-----/,
